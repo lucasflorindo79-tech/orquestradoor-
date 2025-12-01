@@ -1,0 +1,56 @@
+name: export-sinan
+
+on:
+  workflow_dispatch:   # permite rodar manualmente no Actions (você também pode adicionar schedule)
+  # schedule:
+  #   - cron: "0 8 * * 1,4"  # exemplo segundas e quintas às 08:00 UTC
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers (with dependencies)
+        run: |
+          # instala navegadores necessários para Playwright
+          python -m playwright install --with-deps
+
+      - name: Create downloads folder
+        run: mkdir -p ./downloads
+
+      - name: Run export script
+        env:
+          SINAN_USER: ${{ secrets.SINAN_USER }}
+          SINAN_PASS: ${{ secrets.SINAN_PASS }}
+        run: |
+          # Ajuste o caminho se seu script estiver em outra pasta
+          python sinan_playwright_export.py
+
+      - name: Upload downloads artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sinan-downloads
+          path: ./downloads

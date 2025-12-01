@@ -60,7 +60,7 @@ def solicitar_exportacao(data_inicio, data_fim):
     # 1) load solicitarExportacao page to get viewstate (pode ser necessário carregar consultarExportacoes)
     r = session.get(EXPORT_SOLICITAR, timeout=30)
     r.raise_for_status()
-    viewstate = get_viewstate(r.text)
+    viewstate = get_viewstate(r.text)# Certifique-se de que get_viewstate funcione
 
     # Prepare payload baseado no curl que você achou. Ajuste nomes se necessário.
     data_payload = {
@@ -81,7 +81,8 @@ def solicitar_exportacao(data_inicio, data_fim):
         "form:j_id124": "on",  # exportar dados de id paciente?
         "javax.faces.ViewState": viewstate,
         "form:j_id128": "form:j_id128",  # o botão acionado via AJAX no curl
-        "AJAX:EVENTS_COUNT": "1"
+        "AJAX:EVENTS_COUNT": "1",
+        "":""
     }
 
     headers = {
@@ -102,8 +103,10 @@ def solicitar_exportacao(data_inicio, data_fim):
         print("Número da solicitação:", numero)
         return numero
     else:
+        print("----INÍCIO DO LOG DE ERRO")
         print("Não consegui extrair número da resposta. Resposta curta:")
         print(txt[:800])
+        print("----FIM DO LOG DE ERRO")
         return None
 
 def consultar_e_baixar(numero_solicitacao, timeout_minutes=15):
@@ -176,4 +179,3 @@ if __name__ == "__main__":
     arquivo = consultar_e_baixar(numero, timeout_minutes=20)
 
     print("Processo finalizado. Arquivo:", arquivo)
-

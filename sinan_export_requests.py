@@ -152,11 +152,14 @@ def consultar_e_baixar(numero_solicitacao, timeout_minutes=15):
     raise TimeoutError("Tempo esgotado aguardando disponibilização do arquivo.")
 
 if __name__ == "__main__":
-    if not USER := USERNAME:
-        print("Defina as variáveis de ambiente SINAN_USER e SINAN_PASS.")
+    # Garante que as variáveis USERNAME e PASSWORD foram preenchidas por os.environ.get()
+    
+    if not USERNAME:
+        print("Erro: Defina as variáveis de ambiente SINAN_USER e SINAN_PASS.")
         exit(1)
-    if not PASS := PASSWORD:
-        print("Defina as variáveis de ambiente SINAN_USER e SINAN_PASS.")
+        
+    if not PASSWORD:
+        print("Erro: Defina as variáveis de ambiente SINAN_USER e SINAN_PASS.")
         exit(1)
 
     ok = login(USER, PASS)
@@ -171,4 +174,5 @@ if __name__ == "__main__":
         raise SystemExit("Não foi possível solicitar exportação.")
 
     arquivo = consultar_e_baixar(numero, timeout_minutes=20)
+
     print("Processo finalizado. Arquivo:", arquivo)

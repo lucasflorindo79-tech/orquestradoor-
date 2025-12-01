@@ -18,7 +18,10 @@ os.makedirs(OUT_FOLDER, exist_ok=True)
 
 session = requests.Session()
 session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/142.0.0.0"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/142.0.0.0",
+    "Accept": "*/*", # Aceita qualquer tipo de resposta
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Faces-Request": "partial/ajax" # Isso é crucial para requisições AJAX em JSF
 })
 
 def get_viewstate(html):
@@ -48,6 +51,7 @@ def login(username, password):
     # Enviar POST
     r2 = session.post(LOGIN_URL, data=payload, headers={"Referer": LOGIN_URL}, timeout=30)
     r2.raise_for_status()
+    print(f"URL após o POST de login: {r2.url}") # Adicione esta linha
     # verificar se login ok (ex.: presença de texto "logout" ou usuário no topo)
     if "Sair" in r2.text or "logout" in r2.text.lower() or username.split('@')[0] in r2.text:
         print("Login OK")

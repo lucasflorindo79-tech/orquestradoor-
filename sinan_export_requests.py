@@ -162,7 +162,7 @@ if __name__ == "__main__":
         print("Erro: Defina as variáveis de ambiente SINAN_USER e SINAN_PASS.")
         exit(1)
 
-    ok = login(USER, PASS)
+    ok = login(USERNAME, PASSWORD)
     if not ok:
         raise SystemExit("Login falhou.")
 
@@ -176,3 +176,4 @@ if __name__ == "__main__":
     arquivo = consultar_e_baixar(numero, timeout_minutes=20)
 
     print("Processo finalizado. Arquivo:", arquivo)
+

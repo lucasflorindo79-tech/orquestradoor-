@@ -86,8 +86,8 @@ jobs:
             echo "Último zip encontrado: $ZIPFILE"
             unzip -o "$ZIPFILE" -d ${{ env.OUT_CONVERTED }}
             # opcional: converter DBF/CSV extraído para XLSX via script python se existir
-            if [ -f convert_zip_to_excel.py ]; then
-              python convert_zip_to_excel.py "$ZIPFILE" "${{ env.OUT_CONVERTED }}"
+            if [ -f extract_and_convert.py ]; then
+              python extract_and_convert.py "$ZIPFILE" "${{ env.OUT_CONVERTED }}"
             fi
           fi
         continue-on-error: false

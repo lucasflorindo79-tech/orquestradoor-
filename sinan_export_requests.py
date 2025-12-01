@@ -43,9 +43,10 @@ def login(username, password):
         "form:username": username,
         "form:password": password,
         "form": "form",
-        "form:j_idt??": "",   # se a página tiver campos ocultos extras
+        # Substitua a linha abaixo por esta, usando o nome exato da imagem:
+        "537cbe40abe53d1f7cdb9bd1": "",   
         "javax.faces.ViewState": viewstate,
-        "form:loginButton": "Entrar"  # nome do botão pode variar
+        "form:loginButton": "Entrar"
     }
     # Muitas vezes o botão é apenas um input; experimente sem o botão também
     # Enviar POST

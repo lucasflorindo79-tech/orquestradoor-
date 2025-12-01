@@ -1,6 +1,7 @@
 playwright>=1.35.0
-beautifulsoup4
-requests
 pandas
 openpyxl
 lxml
+dbfread
+requests
+beautifulsoup4

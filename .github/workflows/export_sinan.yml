@@ -1,9 +1,9 @@
 name: export-sinan
 
 on:
-  workflow_dispatch:   # permite rodar manualmente no Actions (você também pode adicionar schedule)
+  workflow_dispatch:
   # schedule:
-  #   - cron: "0 8 * * 1,4"  # exemplo segundas e quintas às 08:00 UTC
+  #   - cron: "0 8 * * 1,4"
 
 jobs:
   export:
@@ -37,8 +37,9 @@ jobs:
           # instala navegadores necessários para Playwright
           python -m playwright install --with-deps
 
-      - name: Create downloads folder
-        run: mkdir -p ./downloads
+      # PASSO ATUALIZADO: Criar a pasta FINAL de saída (out_folder_final)
+      - name: Create final output folder
+        run: mkdir -p ./saida_final
 
       - name: Run export script
         env:
@@ -48,9 +49,10 @@ jobs:
           # Ajuste o caminho se seu script estiver em outra pasta
           python sinan_playwright_export.py
 
-      - name: Upload downloads artifact
+      # PASSO ATUALIZADO: Fazer upload da pasta FINAL (saida_final)
+      - name: Upload extracted artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sinan-downloads
-          path: ./downloads
+          name: sinan-data-extracted
+          path: ./saida_final

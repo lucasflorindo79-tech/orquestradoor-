@@ -52,12 +52,19 @@ def login(username, password):
     r2 = session.post(LOGIN_URL, data=payload, headers={"Referer": LOGIN_URL}, timeout=30)
     r2.raise_for_status()
     print(f"URL após o POST de login: {r2.url}") # Adicione esta linha
-    # verificar se login ok (ex.: presença de texto "logout" ou usuário no topo)
-    if "Sair" in r2.text or "logout" in r2.text.lower() or username.split('@')[0] in r2.text:
-        print("Login OK")
+    
+    # Verificar se o login foi bem sucedido
+    # A verificação de URL é mais confiável do que procurar texto "Sair"
+    if "/secured/" in r2.url: 
+        print("Login OK (Verificação de URL)")
         return True
+    elif "Sair" in r2.text or "logout" in r2.text.lower():
+         # Se a URL não mudou, mas "Sair" aparece, pode ser um falso positivo, 
+         # mas vamos manter como uma verificação secundária por enquanto
+         print("Login OK (Verificação de texto, URL não mudou)")
+         return True
     else:
-        print("Login possivelmente falhou; verifique credenciais ou formulário.")
+        print("Login falhou; permaneceu na página de login ou erro no formulário.")
         return False
 
 def solicitar_exportacao(data_inicio, data_fim):

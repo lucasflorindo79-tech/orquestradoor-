@@ -4,5 +4,4 @@ requests
 pandas
 openpyxl
 lxml
-dbfread
-python-dotenv
+python-dotenv    # opcional

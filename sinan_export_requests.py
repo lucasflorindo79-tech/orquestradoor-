@@ -1,215 +1,150 @@
-import requests
-from bs4 import BeautifulSoup
+import os
+import re
 import time
 from datetime import datetime
-import os
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 # --- CONFIG ---
 BASE = "https://sinan.saude.gov.br"
 LOGIN_URL = BASE + "/sinan/login/login.jsf"
 EXPORT_SOLICITAR = BASE + "/sinan/secured/exportacao/solicitarExportacao.jsf"
 EXPORT_CONSULTAR = BASE + "/sinan/secured/exportacao/consultarExportacoes.jsf"
-DOWNLOAD_BASE = BASE  # normalmente o link é relativo
 
-USERNAME = os.environ.get("SINAN_USER")   # setar como variavel de ambiente
+# Lembre-se de definir estas variáveis de ambiente no seu GitHub Actions
+USERNAME = os.environ.get("SINAN_USER")   
 PASSWORD = os.environ.get("SINAN_PASS")
 OUT_FOLDER = r"./downloads"
 os.makedirs(OUT_FOLDER, exist_ok=True)
 
-session = requests.Session()
-session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/142.0.0.0",
-    "Accept": "*/*", # Aceita qualquer tipo de resposta
-    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Faces-Request": "partial/ajax" # Isso é crucial para requisições AJAX em JSF
-})
+def run_automation():
+    with sync_playwright() as p:
+        # Use headless=True para rodar no GitHub Actions sem interface gráfica
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
 
-def get_viewstate(html):
-    soup = BeautifulSoup(html, "html.parser")
-    vs = soup.find("input", {"name": lambda n: n and "ViewState" in n})
-    if not vs:
-        # alternativa para jsf: javax.faces.ViewState
-        vs = soup.find("input", {"name":"javax.faces.ViewState"})
-    return vs["value"] if vs else None
+        # 1. Login
+        print("Tentando fazer login...")
+        if not login(page, USERNAME, PASSWORD):
+            print("Automação interrompida devido a falha no login.")
+            browser.close()
+            return
 
-def extract_dynamic_fields(html):
-    soup = BeautifulSoup(html, "html.parser")
-    dynamic_fields = {}
-    # Extrai todos os inputs ocultos que não são o ViewState, username ou password
-    for input_tag in soup.find_all("input", {"type": "hidden"}):
-        name = input_tag.get("name")
-        if name and "ViewState" not in name and "username" not in name and "password" not in name:
-            value = input_tag.get("value", "")
-            dynamic_fields[name] = value
+        # 2. Solicitar Exportação
+        data_inicio = "01/01/2025"
+        data_fim = datetime.now().strftime("%d/%m/%Y")
+        print(f"Solicitando exportação de {data_inicio} até {data_fim}...")
+        numero_solicitacao = solicitar_exportacao(page, data_inicio, data_fim)
+        
+        if not numero_solicitacao:
+            print("Não foi possível obter o número da solicitação. Interrompendo.")
+            browser.close()
+            return
+
+        # 3. Consultar e Baixar
+        print(f"Aguardando e baixando arquivo para solicitação {numero_solicitacao}...")
+        arquivo_baixado = consultar_e_baixar(page, numero_solicitacao)
+
+        if arquivo_baixado:
+            print(f"Processo finalizado. Arquivo salvo em: {arquivo_baixado}")
+        else:
+            print("Falha ao baixar o arquivo.")
+
+        browser.close()
+
+
+def login(page, username, password):
+    page.goto(LOGIN_URL)
     
-    # Adiciona campos extras que parecem ser gerados via JS (sId, sAW, etc.)
-    # Estes campos geralmente não estão no HTML inicial, mas são adicionados via JS.
-    # Como não podemos rodar JS, o seu método atual de hardcodar eles é a única forma, 
-    # mas o campo hash (o numero gigante) ESTÁ no HTML.
-    
-    # Vamos focar em pegar o campo hash gigante
-    # O nome dele é o hash, o valor é vazio.
-    # Exemplo: <input type="hidden" name="537cbe40abe53d1f7cdb9bd1" value="" />
-    # A função acima já deve pegar isso.
-
-    return dynamic_fields
-
-
-def login(username, password):
-    #### Step 2.1: Obter a página de login e campos dinâmicos
-    r = session.get(LOGIN_URL, timeout=30)
-    r.raise_for_status()
-    viewstate = get_viewstate(r.text)
-    dynamic_fields = extract_dynamic_fields(r.text)
-
-    #### Step 2.2: Preparar o payload combinando campos
-    payload = {
-        "form:username": username,
-        "form:password": password,
-        "form": "form",
-        "javax.faces.ViewState": viewstate,
-        "form:loginButton": "Entrar",
-    }
-    
-    # Adiciona todos os campos dinâmicos extraídos automaticamente
-    payload.update(dynamic_fields)
-
-    #### Step 2.3: Enviar o POST de login e verificar o resultado
-    r2 = session.post(LOGIN_URL, data=payload, headers={"Referer": LOGIN_URL}, timeout=30)
-    r2.raise_for_status()
-    print(f"URL após o POST de login: {r2.url}")
-    
-    if "/secured/" in r2.url: 
-        print("Login OK (Verificação de URL)")
-        return True
-    elif "Sair" in r2.text or "logout" in r2.text.lower():
-         print("Login OK (Verificação de texto, URL não mudou)")
-         return True
-    else:
-        print("Login falhou; permaneceu na página de login ou erro no formulário.")
+    try:
+        # Preenche os campos usando os seletores NAME que vimos antes
+        page.fill('input[name="form:username"]', username)
+        page.fill('input[name="form:password"]', password)
+        
+        # Clica no botão "Entrar" e espera a navegação/carregamento da página
+        page.click('button:text("Entrar")') 
+        # Aguarda a página carregar (pode demorar um pouco)
+        page.wait_for_load_state('networkidle') 
+        
+        # Verifica se o login foi bem-sucedido checando a URL final
+        if "/secured/" in page.url:
+            print("Login OK!")
+            return True
+        else:
+            print(f"Login falhou. URL atual: {page.url}")
+            # O Playwright consegue ver a página, então podemos verificar a mensagem de erro
+            error_message = page.locator('.ui-messages-error').all_inner_texts()
+            if error_message:
+                print(f"Mensagem de erro na tela: {error_message}")
+            return False
+            
+    except PlaywrightTimeoutError:
+        print("Timeout durante o login. Verifique a conexão ou seletor.")
         return False
 
+def solicitar_exportacao(page, data_inicio, data_fim):
+    page.goto(EXPORT_SOLICITAR)
+    page.wait_for_load_state('domcontentloaded')
 
-def solicitar_exportacao(data_inicio, data_fim):
-    # 1) load solicitarExportacao page to get viewstate (pode ser necessário carregar consultarExportacoes)
-    r = session.get(EXPORT_SOLICITAR, timeout=30)
-    r.raise_for_status()
-    viewstate = get_viewstate(r.text)# Certifique-se de que get_viewstate funcione
+    # Preenche o formulário de solicitação
+    page.select_option('select[name="form:consulta_tipoPeriodo"]', '0') # Data
+    page.fill('input[name="form:consulta_dataInicialInputDate"]', data_inicio)
+    page.fill('input[name="form:consulta_dataFinalInputDate"]', data_fim)
+    page.select_option('select[name="form:tipoUf"]', '3') # Tipo UF (ajuste se necessário)
 
-    # Prepare payload baseado no curl que você achou. Ajuste nomes se necessário.
-    data_payload = {
-        "AJAXREQUEST": "_viewRoot",
-        "form": "form",
-        "form:consulta_tipoPeriodo": "0",  # Data por exemplo
-        "form:consulta_dataInicialInputDate": data_inicio,
-        "form:consulta_dataInicialInputCurrentDate": data_inicio.split('/')[-1], # placeholder
-        "form:consulta_dataFinalInputDate": data_fim,
-        "form:consulta_dataFinalInputCurrentDate": data_fim.split('/')[-1],
-        "form:j_id102": "10",
-        "form:tipoUf": "3",  # Notificação ou Residência (valor conforme select)
-        "form:regionalcomboboxField": "",
-        "form:regional": "",
-        "form:municipiocomboboxField": "",
-        "form:municipio": "",
-        "form:j_id120": "0",
-        "form:j_id124": "on",  # exportar dados de id paciente?
-        "javax.faces.ViewState": viewstate,
-        "form:j_id128": "form:j_id128",  # o botão acionado via AJAX no curl
-        "AJAX:EVENTS_COUNT": "1",
-        "":""
-    }
+    # Clica no botão que aciona a solicitação (geralmente via AJAX)
+    # O seletor "form:j_id128" é dinâmico, Playwright lida com isso se estiver visível/acessível
+    # Vamos usar um seletor mais genérico se o nome mudar:
+    page.click('button:has-text("Solicitar Exportação")') # Procure pelo texto do botão
+    
+    # Espera a resposta AJAX que contém o número da solicitação
+    # O servidor responde com um número, que aparece na tela
+    page.wait_for_selector('text=Solicitação efetuada com sucesso! Número:', timeout=30000)
 
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "Referer": EXPORT_SOLICITAR,
-        "Origin": BASE
-    }
-
-    r2 = session.post(EXPORT_SOLICITAR, data=data_payload, headers=headers, timeout=60)
-    r2.raise_for_status()
-    # Resposta deve conter info com "Número:" ou algo similar (é HTML parcial)
-    txt = r2.text
-    # tentar extrair "Número: 12345"
-    import re
-    m = re.search(r"Número:\s*([0-9\.]+)", txt)
+    # Extrai o número da solicitação da página
+    text_content = page.inner_text('body')
+    m = re.search(r"Número:\s*([0-9\.]+)", text_content)
     if m:
         numero = m.group(1).replace(".", "")
         print("Número da solicitação:", numero)
         return numero
     else:
-        print("----INÍCIO DO LOG DE ERRO")
-        print("Não consegui extrair número da resposta. Resposta curta:")
-        print(txt[:800])
-        print("----FIM DO LOG DE ERRO")
+        print("Não foi possível extrair o número da solicitação da tela.")
         return None
 
-def consultar_e_baixar(numero_solicitacao, timeout_minutes=15):
-    deadline = time.time() + timeout_minutes*60
-    while time.time() < deadline:
-        r = session.get(EXPORT_CONSULTAR, timeout=30)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-        # procurar a tabela com linhas <tr> e coluna 1 texto igual ao número
-        linhas = soup.select("table.rich-table tbody tr")
-        for tr in linhas:
-            tds = tr.find_all("td")
-            if not tds:
-                continue
-            numero = tds[0].get_text(strip=True)
-            if numero.replace(".", "") == numero_solicitacao:
-                print("Encontrado número na tabela! Tentando localizar link de download...")
-                # procurar link com texto "Baixar arquivo DBF" dentro deste TR
-                link = tr.find("a", string=lambda s: s and "Baixar arquivo DBF" in s)
-                if link and link.has_attr("href"):
-                    href = link["href"]
-                    # se href for relativo, montar absoluto
-                    if href.startswith("/"):
-                        href = BASE + href
-                    print("Link de download:", href)
-                    # GET o conteúdo
-                    out_name = os.path.join(OUT_FOLDER, f"export_{numero_solicitacao}.zip")
-                    dl = session.get(href, stream=True, timeout=120)
-                    dl.raise_for_status()
-                    with open(out_name, "wb") as f:
-                        for chunk in dl.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                    print("Arquivo salvo:", out_name)
-                    return out_name
-                else:
-                    # talvez exista um botão que aciona JS — então buscar <a> com class 'download' ou input
-                    link2 = tr.find("a")
-                    if link2 and link2.has_attr("onclick"):
-                        # pode ser necessário construir URL do onclick — difícil generalizar
-                        print("Link com onclick. Conteúdo onclick:", link2["onclick"][:200])
-                        # tentar extrair URL do onclick...
-                    print("Link não encontrado ainda. Vamos aguardar e tentar de novo.")
-        print("Não achou ainda. Vou aguardar 10s e tentar novamente...")
-        time.sleep(10)
+def consultar_e_baixar(page, numero_solicitacao, timeout_minutes=15):
+    page.goto(EXPORT_CONSULTAR)
+    start_time = time.time()
+
+    while time.time() - start_time < timeout_minutes * 60:
+        page.wait_for_load_state('domcontentloaded')
+        
+        # Procura na tabela pelo número da solicitação e pelo link "Baixar arquivo DBF"
+        # Usando seletores CSS mais avançados do Playwright
+        download_link_selector = f'table.rich-table tbody tr:has-text("{numero_solicitacao}") a:has-text("Baixar arquivo DBF")'
+        
+        if page.locator(download_link_selector).count() > 0:
+            print("Link de download encontrado!")
+            
+            # Clica no link e espera o download ocorrer
+            with page.expect_download() as download_info:
+                page.click(download_link_selector)
+            
+            download = download_info.value
+            file_path = os.path.join(OUT_FOLDER, download.suggested_filename)
+            download.save_as(file_path)
+            print(f"Arquivo salvo: {file_path}")
+            return file_path
+        else:
+            print(f"Arquivo {numero_solicitacao} não está pronto. Recarregando em 10s...")
+            time.sleep(10)
+            page.reload()
+
     raise TimeoutError("Tempo esgotado aguardando disponibilização do arquivo.")
 
+
 if __name__ == "__main__":
-    # Garante que as variáveis USERNAME e PASSWORD foram preenchidas por os.environ.get()
+    if not USERNAME or not PASSWORD:
+        print("Erro: Defina as variáveis de ambiente SINAN_USER e SINAN_PASS.")
+        exit(1)
     
-    if not USERNAME:
-        print("Erro: Defina as variáveis de ambiente SINAN_USER e SINAN_PASS.")
-        exit(1)
-        
-    if not PASSWORD:
-        print("Erro: Defina as variáveis de ambiente SINAN_USER e SINAN_PASS.")
-        exit(1)
-
-    ok = login(USERNAME, PASSWORD)
-    if not ok:
-        raise SystemExit("Login falhou.")
-
-    # datas exemplo
-    data_inicio = "01/01/2025"
-    data_fim = datetime.now().strftime("%d/%m/%Y")
-    numero = solicitar_exportacao(data_inicio, data_fim)
-    if not numero:
-        raise SystemExit("Não foi possível solicitar exportação.")
-
-    arquivo = consultar_e_baixar(numero, timeout_minutes=20)
-
-    print("Processo finalizado. Arquivo:", arquivo)
+    run_automation()

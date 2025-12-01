@@ -32,82 +32,63 @@ def get_viewstate(html):
         vs = soup.find("input", {"name":"javax.faces.ViewState"})
     return vs["value"] if vs else None
 
+def extract_dynamic_fields(html):
+    soup = BeautifulSoup(html, "html.parser")
+    dynamic_fields = {}
+    # Extrai todos os inputs ocultos que não são o ViewState, username ou password
+    for input_tag in soup.find_all("input", {"type": "hidden"}):
+        name = input_tag.get("name")
+        if name and "ViewState" not in name and "username" not in name and "password" not in name:
+            value = input_tag.get("value", "")
+            dynamic_fields[name] = value
+    
+    # Adiciona campos extras que parecem ser gerados via JS (sId, sAW, etc.)
+    # Estes campos geralmente não estão no HTML inicial, mas são adicionados via JS.
+    # Como não podemos rodar JS, o seu método atual de hardcodar eles é a única forma, 
+    # mas o campo hash (o numero gigante) ESTÁ no HTML.
+    
+    # Vamos focar em pegar o campo hash gigante
+    # O nome dele é o hash, o valor é vazio.
+    # Exemplo: <input type="hidden" name="537cbe40abe53d1f7cdb9bd1" value="" />
+    # A função acima já deve pegar isso.
+
+    return dynamic_fields
+
+
 def login(username, password):
-    # 1) GET login page
+    #### Step 2.1: Obter a página de login e campos dinâmicos
     r = session.get(LOGIN_URL, timeout=30)
     r.raise_for_status()
     viewstate = get_viewstate(r.text)
+    dynamic_fields = extract_dynamic_fields(r.text)
 
-    # 2) Prepare payload. OS nomes dos campos dependem do form da página; ajustar se diferente
+    #### Step 2.2: Preparar o payload combinando campos
     payload = {
-        "form:username": username, # Seu usuário
-        "form:password": password, # Sua senha
+        "form:username": username,
+        "form:password": password,
         "form": "form",
-        "javax.faces.ViewState": viewstate, # O ViewState extraído acima
+        "javax.faces.ViewState": viewstate,
         "form:loginButton": "Entrar",
-        "id": "", # Campo vazio
-        # AQUI ESTÃO OS CAMPOS ADICIONAIS QUE FALTAVAM:
-        "537cbe40abe53d1f7cdb9bd1": "",
-        "sAW": "1366",
-        "sAH": "728",
-        "bIW": "659",
-        "bIH": "607",
-        "pD": "24",
-        "dPR": "1",
-        "or": "landscape-primary",
-        "nT": "0",
-        "rC": "0",
-        "nS": "0",
-        "cS": "228",
-        "cE": "228",
-        "dLE": "228",
-        "dLS": "228",
-        "fS": "228",
-        "hS": "-1",
-        "rE": "-1",
-        "rS": "-1",
-        "reS": "241",
-        "resS": "417",
-        "resE": "419",
-        "uEE": "-1",
-        "uES": "-1",
-        "dL": "439",
-        "dI": "594",
-        "dCLES": "594",
-        "dCLEE": "602",
-        "dC": "617",
-        "lES": "617",
-        "lEE": "627",
-        "s": "", # Campo vazio
-        "nt": "", # Campo vazio
-        "title": "SINAN - Sistema de Informação de Agravos de Notificação",
-        "path": "https://sinan.saude.gov.br/sinan/login/login.jsf",
-        "ref": "", # Campo vazio
-        "sId": "4pwgx45y", # Este pode ser dinâmico; talvez precise ajustar depois
-        "sST": "1764611940",
-        "sIS": "5",
-        "rV": "1",
-        "v": "1.4.1"
     }
-    # Muitas vezes o botão é apenas um input; experimente sem o botão também
-    # Enviar POST
+    
+    # Adiciona todos os campos dinâmicos extraídos automaticamente
+    payload.update(dynamic_fields)
+
+    #### Step 2.3: Enviar o POST de login e verificar o resultado
     r2 = session.post(LOGIN_URL, data=payload, headers={"Referer": LOGIN_URL}, timeout=30)
     r2.raise_for_status()
-    print(f"URL após o POST de login: {r2.url}") # Adicione esta linha
+    print(f"URL após o POST de login: {r2.url}")
     
-    # Verificar se o login foi bem sucedido
-    # A verificação de URL é mais confiável do que procurar texto "Sair"
     if "/secured/" in r2.url: 
         print("Login OK (Verificação de URL)")
         return True
     elif "Sair" in r2.text or "logout" in r2.text.lower():
-         # Se a URL não mudou, mas "Sair" aparece, pode ser um falso positivo, 
-         # mas vamos manter como uma verificação secundária por enquanto
          print("Login OK (Verificação de texto, URL não mudou)")
          return True
     else:
         print("Login falhou; permaneceu na página de login ou erro no formulário.")
         return False
+
 
 def solicitar_exportacao(data_inicio, data_fim):
     # 1) load solicitarExportacao page to get viewstate (pode ser necessário carregar consultarExportacoes)

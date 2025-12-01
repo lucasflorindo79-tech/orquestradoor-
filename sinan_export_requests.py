@@ -40,13 +40,54 @@ def login(username, password):
 
     # 2) Prepare payload. OS nomes dos campos dependem do form da página; ajustar se diferente
     payload = {
-        "form:username": username,
-        "form:password": password,
+        "form:username": username, # Seu usuário
+        "form:password": password, # Sua senha
         "form": "form",
-        # Substitua a linha abaixo por esta, usando o nome exato da imagem:
-        "537cbe40abe53d1f7cdb9bd1": "",   
-        "javax.faces.ViewState": viewstate,
-        "form:loginButton": "Entrar"
+        "javax.faces.ViewState": viewstate, # O ViewState extraído acima
+        "form:loginButton": "Entrar",
+        "id": "", # Campo vazio
+        # AQUI ESTÃO OS CAMPOS ADICIONAIS QUE FALTAVAM:
+        "537cbe40abe53d1f7cdb9bd1": "",
+        "sAW": "1366",
+        "sAH": "728",
+        "bIW": "659",
+        "bIH": "607",
+        "pD": "24",
+        "dPR": "1",
+        "or": "landscape-primary",
+        "nT": "0",
+        "rC": "0",
+        "nS": "0",
+        "cS": "228",
+        "cE": "228",
+        "dLE": "228",
+        "dLS": "228",
+        "fS": "228",
+        "hS": "-1",
+        "rE": "-1",
+        "rS": "-1",
+        "reS": "241",
+        "resS": "417",
+        "resE": "419",
+        "uEE": "-1",
+        "uES": "-1",
+        "dL": "439",
+        "dI": "594",
+        "dCLES": "594",
+        "dCLEE": "602",
+        "dC": "617",
+        "lES": "617",
+        "lEE": "627",
+        "s": "", # Campo vazio
+        "nt": "", # Campo vazio
+        "title": "SINAN - Sistema de Informação de Agravos de Notificação",
+        "path": "https://sinan.saude.gov.br/sinan/login/login.jsf",
+        "ref": "", # Campo vazio
+        "sId": "4pwgx45y", # Este pode ser dinâmico; talvez precise ajustar depois
+        "sST": "1764611940",
+        "sIS": "5",
+        "rV": "1",
+        "v": "1.4.1"
     }
     # Muitas vezes o botão é apenas um input; experimente sem o botão também
     # Enviar POST

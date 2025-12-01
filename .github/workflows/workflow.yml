@@ -1,0 +1,35 @@
+name: Download SINAN export
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'   # toda segunda às 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 openpyxl
+
+      - name: Run export script
+        env:
+          SINAN_USER: ${{ secrets.SINAN_USER }}
+          SINAN_PASS: ${{ secrets.SINAN_PASS }}
+        run: |
+          python sinan_export_requests.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sinan-export
+          path: downloads/*

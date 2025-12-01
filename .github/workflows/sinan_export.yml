@@ -65,7 +65,7 @@ jobs:
           OUT_FOLDER: ${{ env.OUT_FOLDER }}
           OUT_CONVERTED: ${{ env.OUT_CONVERTED }}
         run: |
-          python sinan_playwright.py
+          python sinan_playwright_export.py
 
       - name: List downloaded files
         run: |

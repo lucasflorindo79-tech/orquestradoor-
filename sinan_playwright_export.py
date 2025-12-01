@@ -45,9 +45,16 @@ def run_automation():
         arquivo_baixado = consultar_e_baixar(page, numero_solicitacao)
 
         if arquivo_baixado:
-            print(f"Processo finalizado. Arquivo salvo em: {arquivo_baixado}")
+        print(f"Processo finalizado. Arquivo salvo em: {arquivo_baixado}")
+        
+        # EXTRAIR ZIP
+        extrair_zip(arquivo_baixado, OUT_FOLDER)
+        
+        # CONVERTER PARA EXCEL
+        converter_dbf_para_excel(OUT_FOLDER)
+
         else:
-            print("Falha ao baixar o arquivo.")
+        print("Falha ao baixar o arquivo.")
 
         browser.close()
 
@@ -148,3 +155,39 @@ if __name__ == "__main__":
         exit(1)
     
     run_automation()
+
+import zipfile
+import pandas as pd
+from dbfread import DBF
+
+def extrair_zip(zip_path, destino="./downloads"):
+    print(f"Extraindo ZIP: {zip_path}")
+    with zipfile.ZipFile(zip_path, 'r') as z:
+        z.extractall(destino)
+
+    print("Arquivos extraídos.")
+    return destino
+
+
+def converter_dbf_para_excel(pasta_download="./downloads"):
+    print("Procurando arquivos DBF...")
+
+    # Procura o arquivo .dbf extraído
+    for arquivo in os.listdir(pasta_download):
+        if arquivo.lower().endswith(".dbf"):
+            dbf_path = os.path.join(pasta_download, arquivo)
+            print(f"Encontrado DBF: {dbf_path}")
+
+            # Lê DBF
+            table = DBF(dbf_path, load=True)
+            df = pd.DataFrame(iter(table))
+
+            # Gera Excel final
+            excel_path = os.path.join(pasta_download, "dados_convertidos.xlsx")
+            df.to_excel(excel_path, index=False)
+
+            print(f"Excel gerado em: {excel_path}")
+            return excel_path
+
+    print("Nenhum arquivo DBF encontrado após extração.")
+    return None

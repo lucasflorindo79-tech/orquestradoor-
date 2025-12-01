@@ -1,35 +1,16 @@
-name: Download SINAN export
-
-on:
-  schedule:
-    - cron: '0 8 * * 1'   # toda segunda às 08:00 UTC
-  workflow_dispatch:
-
-jobs:
-  export:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install requirements
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 openpyxl playwright install chromium # Instala o navegador necessário
-
-      - name: Run export script
-        env:
-          SINAN_USER: ${{ secrets.SINAN_USER }}
-          SINAN_PASS: ${{ secrets.SINAN_PASS }}
-        run: |
-          python sinan_export_requests.py
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sinan-export
-          path: downloads/*
+steps:
+- uses: actions/checkout@v4
+- name: Set up Python
+  uses: actions/setup-python@v5
+  with:
+    python-version: '3.x'
+- name: Install dependencies
+  run: |
+    pip install playwright requests beautifulsoup4
+    playwright install chromium # Instala o navegador necessário
+- name: Run script
+  # Certifique-se de que o nome do arquivo Python esteja correto aqui
+  run: python seu_script_novo.py 
+  env:
+    SINAN_USER: ${{ secrets.SINAN_USER }}
+    SINAN_PASS: ${{ secrets.SINAN_PASS }}

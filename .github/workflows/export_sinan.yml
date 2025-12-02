@@ -1,23 +1,24 @@
-name: export-sinan
+name: Run SINAN Playwright export
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
-  # schedule:
-  #   - cron: "0 8 * * 1,4"
+
+permissions:
+  contents: read
 
 jobs:
-  export:
+  run-sinan-playwright:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -28,31 +29,40 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Install dependencies
+        # If you have requirements.txt, this will install from it; otherwise it will install playwright only.
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          else
+            python -m pip install --upgrade pip
+            pip install playwright
+          fi
 
-      - name: Install Playwright browsers (with dependencies)
+      - name: Install Playwright browsers (with deps)
+        # installs browsers required by playwright; --with-deps helps in many linux runners
         run: |
-          # instala navegadores necessários para Playwright
           python -m playwright install --with-deps
 
-      # PASSO ATUALIZADO: Criar a pasta FINAL de saída (out_folder_final)
-      - name: Create final output folder
-        run: mkdir -p ./saida_final
+      - name: Show Python & Playwright info
+        run: |
+          python --version
+          pip show playwright || true
+          python -m playwright --help || true
 
-      - name: Run export script
+      - name: Run sinan_playwright_export.py
         env:
           SINAN_USER: ${{ secrets.SINAN_USER }}
           SINAN_PASS: ${{ secrets.SINAN_PASS }}
         run: |
-          # Ajuste o caminho se seu script estiver em outra pasta
+          set -o pipefail
           python sinan_playwright_export.py
 
-      # PASSO ATUALIZADO: Fazer upload da pasta FINAL (saida_final)
-      - name: Upload extracted artifact
+      - name: Upload login screenshot (if created)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sinan-data-extracted
-          path: ./saida_final
+          name: sinan-login-screenshot
+          path: |
+            login_result.png
+            login_result.png.gz
